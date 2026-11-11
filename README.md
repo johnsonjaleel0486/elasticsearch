@@ -28,3 +28,13 @@ Kibana: http://localhost:5601
 - Losing a node with 1 replica => cluster YELLOW (replicas unassigned), no data loss; recovers to GREEN when the node returns.
 - Rolling restarts: set `cluster.routing.allocation.enable: primaries`, flush, restart one node, re-enable allocation, wait for green, repeat.
 - Bulk loads without an explicit `_id` create duplicates when re-run (each run gets new auto-generated IDs). Explicit `_id`s make ingestion idempotent: a retry overwrites instead of duplicating.
+
+## Phase 1 results (run on Docker Desktop, macOS, 2026-11-11)
+**Drill 1: lose a node (es02 stopped)**
+- Status went **yellow**: 2 of 3 nodes, all 33 primaries still active (no data loss), 22 replicas unassigned, 66.7% of shards active.
+- `_cluster/allocation/explain` reported `NODE_LEFT` / `allocation_delayed`: Elasticsearch waits `index.unassigned.node_left.delayed_timeout` (default 60s) before re-replicating, so a short restart doesn't trigger a full data copy.
+- es02 rejoined, so the cluster went **green** with 66 active shards (33 primaries + 33 replicas), reusing the replica data already on es02's disk.
+
+**Drill 2: rolling restart (es03)**
+- Set `cluster.routing.allocation.enable: primaries`, flushed (34/34 shards succeeded), restarted the node, re-enabled allocation, cluster **green**.
+- Lesson: the first version of the script re-enabled allocation before es03 had actually left and rejoined. The script now waits for the node count to drop to 2 and come back to 3 before re-enabling allocation.

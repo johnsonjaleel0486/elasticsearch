@@ -15,8 +15,14 @@ echo "== Drill 2: rolling restart of es03 =="
 curl -s -X PUT $ES/_cluster/settings -H 'Content-Type: application/json' \
   -d '{"persistent":{"cluster.routing.allocation.enable":"primaries"}}'; echo
 curl -s -X POST $ES/_flush; echo
-docker compose restart es03
-until curl -s "$ES/_cat/nodes?h=name" | grep -q es03; do sleep 5; done
+docker compose stop es03
+# Wait until the cluster actually sees es03 leave...
+until [[ "$(curl -s "$ES/_cat/nodes?h=name" | wc -l | tr -d ' ')" -eq 2 ]]; do sleep 2; done
+echo "es03 left the cluster:"; curl -s "$ES/_cat/health?v"
+docker compose start es03
+# ...and rejoin, before re-enabling replica allocation
+until [[ "$(curl -s "$ES/_cat/nodes?h=name" | wc -l | tr -d ' ')" -eq 3 ]]; do sleep 2; done
+echo "es03 rejoined:"; curl -s "$ES/_cat/nodes?v"
 curl -s -X PUT $ES/_cluster/settings -H 'Content-Type: application/json' \
   -d '{"persistent":{"cluster.routing.allocation.enable":null}}'; echo
 curl -s "$ES/_cluster/health?wait_for_status=green&timeout=180s&pretty"

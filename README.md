@@ -13,6 +13,8 @@ Hands-on lab standing up and operating Elasticsearch and OpenSearch clusters: cl
 | 6 | `phase6-airgapped-rpm/` | Offline RPM install on RHEL VMs (low-to-high simulation) | Planned |
 
 ## Phase 1 quick start
+**Prereqs:** Docker (Docker Desktop on macOS: Settings > Resources > Memory at 6GB+), curl.
+
 ```bash
 cd phase1-docker-cluster
 ./setup.sh            # cluster up, wait for green

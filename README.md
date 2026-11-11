@@ -27,3 +27,4 @@ Kibana: http://localhost:5601
 - `vm.max_map_count` must be >= 262144 or Elasticsearch won't start.
 - Losing a node with 1 replica => cluster YELLOW (replicas unassigned), no data loss; recovers to GREEN when the node returns.
 - Rolling restarts: set `cluster.routing.allocation.enable: primaries`, flush, restart one node, re-enable allocation, wait for green, repeat.
+- Bulk loads without an explicit `_id` create duplicates when re-run (each run gets new auto-generated IDs). Explicit `_id`s make ingestion idempotent: a retry overwrites instead of duplicating.

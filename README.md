@@ -1,6 +1,6 @@
 # Elasticsearch / OpenSearch Platform Lab
 
-Hands-on lab standing up and operating Elasticsearch and OpenSearch clusters: cluster configuration, shards and replicas, mappings, index lifecycle, ingestion pipelines (Logstash, Filebeat, NiFi), snapshot backup/restore, monitoring, Kubernetes (ECK), and offline (air-gapped) installs.
+Hands-on lab standing up and operating Elasticsearch and OpenSearch clusters: cluster configuration, shards and replicas, mappings, index lifecycle, ingestion pipelines (Logstash, Filebeat, NiFi), snapshot backup/restore, monitoring, Kubernetes (ECK), offline (air-gapped) installs, and vector/hybrid search for AI (RAG).
 
 ## Phases
 | Phase | Folder | Focus | Status |
@@ -11,6 +11,7 @@ Hands-on lab standing up and operating Elasticsearch and OpenSearch clusters: cl
 | 4 | `phase4-opensearch/` | Same cluster on OpenSearch, ISM policies, Dashboards | Planned |
 | 5 | `phase5-k8s-eck/` | ECK operator on Kubernetes, scaling nodes | Planned |
 | 6 | `phase6-airgapped-rpm/` | Offline RPM install on RHEL VMs (low-to-high simulation) | Planned |
+| 7 | `phase7-vector-rag/` | Vector + hybrid search (dense_vector, kNN, BM25 + RRF), embeddings, small RAG Q&A over your own docs with document-level security | Planned |
 
 ## Phase 1 quick start
 **Prereqs:** Docker (Docker Desktop on macOS: Settings > Resources > Memory at 6GB+), curl.

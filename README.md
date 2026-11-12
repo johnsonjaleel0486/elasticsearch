@@ -51,3 +51,4 @@ cd phase2-security-ilm-snapshots
 - TLS on both layers: HTTP (clients to nodes, port 9200) and transport (node to node, port 9300), all certs signed by a lab CA generated with `elasticsearch-certutil`.
 - ILM timings are shortened for the lab (rollover at 3 docs, delete after 3 minutes, poll every 10s). Real values would be days/size-based, e.g. rollover at 50GB primary shard size or 1 day.
 - Modern alternative to rollover aliases: data streams (same ILM policy, Elasticsearch manages the backing indices).
+- `create_doc` only allows the bulk `create` action (append-only). The bulk `index` action can overwrite an existing document, so it needs the stronger `index` privilege. A log-shipping service account should be append-only.

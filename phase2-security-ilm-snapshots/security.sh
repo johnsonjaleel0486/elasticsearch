@@ -27,15 +27,16 @@ if [[ "$(code_as elastic "$ELASTIC_PASSWORD" HEAD /app-logs)" != "200" ]]; then
       "latency_ms": { "type": "integer" } } } }'
 fi
 
-step "Load data AS ingest_svc (the service account, not the superuser)"
+step "Load data AS ingest_svc using the bulk create action (append-only, matches create_doc)"
 curl -s --cacert ca.crt -u "ingest_svc:${INGEST_PASSWORD}" -X POST "$ES_URL/_bulk?refresh" \
-  -H 'Content-Type: application/x-ndjson' --data-binary $'{"index":{"_index":"app-logs","_id":"log-0001"}}
+  -H 'Content-Type: application/x-ndjson' --data-binary $'{"create":{"_index":"app-logs","_id":"log-0001"}}
 {"@timestamp":"2026-11-11T20:00:00Z","host":"web01","level":"ERROR","message":"db timeout","latency_ms":5021}
-{"index":{"_index":"app-logs","_id":"log-0002"}}
+{"create":{"_index":"app-logs","_id":"log-0002"}}
 {"@timestamp":"2026-11-11T20:01:00Z","host":"web02","level":"INFO","message":"login ok","latency_ms":87}
-{"index":{"_index":"app-logs","_id":"log-0003"}}
+{"create":{"_index":"app-logs","_id":"log-0003"}}
 {"@timestamp":"2026-11-11T20:02:00Z","host":"web01","level":"WARN","message":"slow query","latency_ms":1800}
-' | grep -o '"errors":[a-z]*' || true
+' | grep -o '"_id":"log-[0-9]*"\|"status":[0-9]*' | paste - - || true
+echo "(201 = created; 409 on a re-run = already there, NOT overwritten: create_doc is append-only)"
 
 step "Permission checks (expected vs actual HTTP code)"
 check() { local want=$1 desc=$2; shift 2; local got; got=$(code_as "$@")

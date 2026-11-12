@@ -1,0 +1,10 @@
+# Filebeat: tail the raw log files and ship them to Logstash (no parsing here).
+filebeat.inputs:
+  - type: filestream
+    id: web-access-logs
+    paths: ["/logs/*.log"]
+
+output.logstash:
+  hosts: ["logstash:5044"]
+
+logging.level: info

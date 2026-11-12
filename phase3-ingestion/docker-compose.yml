@@ -1,0 +1,55 @@
+# Phase 3: ingestion into the secure Phase 2 cluster.
+#   3a: loggen -> Filebeat -> Logstash (parse/enrich) -> Elasticsearch data stream logs-web-lab
+#   3b: NiFi (profile "nifi"): JSON files -> enrich -> PutElasticsearchRecord -> nifi-orders
+name: phase3-ingestion
+
+networks:
+  es:            # the Phase 2 cluster's network, so es01 resolves and matches its TLS cert
+    external: true
+    name: phase2-security-ilm-snapshots_default
+
+services:
+  loggen:
+    image: alpine:3.20
+    command: ["sh", "/loggen.sh"]
+    volumes:
+      - logs:/logs
+      - ./loggen.sh:/loggen.sh:ro
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:${STACK_VERSION}
+    user: root
+    command: ["filebeat", "-e", "--strict.perms=false"]
+    depends_on: [logstash]
+    networks: [es]
+    volumes:
+      - logs:/logs:ro
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - fbdata:/usr/share/filebeat/data
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:${STACK_VERSION}
+    networks: [es]
+    environment:
+      LOGSTASH_ES_PASSWORD: ${LOGSTASH_ES_PASSWORD}
+      XPACK_MONITORING_ENABLED: "false"
+      CONFIG_RELOAD_AUTOMATIC: "true"
+      LS_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./ca.crt:/usr/share/logstash/config/ca.crt:ro
+
+  nifi:
+    profiles: ["nifi"]
+    image: apache/nifi:2.0.0
+    networks: [es]
+    ports: ["8443:8443"]
+    environment:
+      SINGLE_USER_CREDENTIALS_USERNAME: admin
+      SINGLE_USER_CREDENTIALS_PASSWORD: ${NIFI_ADMIN_PASSWORD}
+      NIFI_JVM_HEAP_INIT: 512m
+      NIFI_JVM_HEAP_MAX: 1g
+    volumes:
+      - ./nifi-lab:/opt/nifi/lab
+
+volumes: { logs: {}, fbdata: {} }

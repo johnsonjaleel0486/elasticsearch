@@ -7,7 +7,7 @@ Hands-on lab standing up and operating Elasticsearch and OpenSearch clusters: cl
 |---|---|---|---|
 | 1 | `phase1-docker-cluster/` | 3-node Elasticsearch + Kibana, shards/replicas, explicit mappings, failure + rolling-restart drills | Done |
 | 2 | `phase2-security-ilm-snapshots/` | TLS + users/roles, ILM hot-warm-delete, snapshot backup/restore, SLM | Done |
-| 3 | `phase3-ingestion/` | Logstash + Filebeat pipeline, NiFi flow into Elasticsearch | Planned |
+| 3 | `phase3-ingestion/` | Filebeat -> Logstash (grok/date/enrich) -> data stream; NiFi flow with strict mapping + error routing | In progress |
 | 4 | `phase4-opensearch/` | Same cluster on OpenSearch, ISM policies, Dashboards | Planned |
 | 5 | `phase5-k8s-eck/` | ECK operator on Kubernetes, scaling nodes | Planned |
 | 6 | `phase6-airgapped-rpm/` | Offline RPM install on RHEL VMs (low-to-high simulation) | Planned |
@@ -71,3 +71,6 @@ cd phase2-security-ilm-snapshots
 **Snapshot and restore**
 - fs repository verified on all 3 nodes. Snapshot SUCCESS, `app-logs` deleted (404), restored, green, doc count 3 before and 3 after.
 - SLM policy `nightly` (01:30 UTC, keep 7 days, min 3, max 14) executed on demand: 33 indices, SUCCESS. Snapshot names use UTC date math.
+
+## Phase 3 quick start
+See [`phase3-ingestion/README.md`](phase3-ingestion/README.md). Needs the Phase 2 cluster running (`docker compose start` in phase2).

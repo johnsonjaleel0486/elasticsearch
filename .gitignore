@@ -3,3 +3,6 @@
 certs/
 ca.crt
 **/ca.crt
+phase3-ingestion/nifi-lab/input/*
+phase3-ingestion/nifi-lab/truststore.p12
+!phase3-ingestion/nifi-lab/input/.gitkeep

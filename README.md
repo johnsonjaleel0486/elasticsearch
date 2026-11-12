@@ -5,8 +5,8 @@ Hands-on lab standing up and operating Elasticsearch and OpenSearch clusters: cl
 ## Phases
 | Phase | Folder | Focus | Status |
 |---|---|---|---|
-| 1 | `phase1-docker-cluster/` | 3-node Elasticsearch + Kibana, shards/replicas, explicit mappings, failure + rolling-restart drills | In progress |
-| 2 | `phase2-security-ilm-snapshots/` | TLS + users/roles, ILM hot-to-delete, snapshot backup/restore | Planned |
+| 1 | `phase1-docker-cluster/` | 3-node Elasticsearch + Kibana, shards/replicas, explicit mappings, failure + rolling-restart drills | Done |
+| 2 | `phase2-security-ilm-snapshots/` | TLS + users/roles, ILM hot-warm-delete, snapshot backup/restore, SLM | In progress |
 | 3 | `phase3-ingestion/` | Logstash + Filebeat pipeline, NiFi flow into Elasticsearch | Planned |
 | 4 | `phase4-opensearch/` | Same cluster on OpenSearch, ISM policies, Dashboards | Planned |
 | 5 | `phase5-k8s-eck/` | ECK operator on Kubernetes, scaling nodes | Planned |
@@ -38,3 +38,16 @@ Kibana: http://localhost:5601
 **Drill 2: rolling restart (es03)**
 - Set `cluster.routing.allocation.enable: primaries`, flushed (34/34 shards succeeded), restarted the node, re-enabled allocation, cluster **green**.
 - Lesson: the first version of the script re-enabled allocation before es03 had actually left and rejoined. The script now waits for the node count to drop to 2 and come back to 3 before re-enabling allocation.
+
+## Phase 2 quick start
+```bash
+cd phase2-security-ilm-snapshots
+./setup.sh      # stops Phase 1, generates passwords in .env, TLS certs, secure 3-node cluster + Kibana
+./security.sh   # least-privilege roles/users + permission checks (expected vs actual HTTP codes)
+./ilm.sh        # ILM policy + template + rollover alias; then ./ilm.sh status to watch hot -> warm -> delete
+./snapshot.sh   # snapshot repo, backup, delete index, restore, verify counts, nightly SLM policy
+```
+- Passwords live in `phase2-security-ilm-snapshots/.env` (git-ignored). Kibana login: `elastic` / `ELASTIC_PASSWORD`.
+- TLS on both layers: HTTP (clients to nodes, port 9200) and transport (node to node, port 9300), all certs signed by a lab CA generated with `elasticsearch-certutil`.
+- ILM timings are shortened for the lab (rollover at 3 docs, delete after 3 minutes, poll every 10s). Real values would be days/size-based, e.g. rollover at 50GB primary shard size or 1 day.
+- Modern alternative to rollover aliases: data streams (same ILM policy, Elasticsearch manages the backing indices).

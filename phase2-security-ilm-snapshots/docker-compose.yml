@@ -1,0 +1,142 @@
+# Phase 2: 3-node Elasticsearch with TLS (HTTP + transport), passwords, Kibana,
+# and a shared snapshot repository path. Based on Elastic's official secure compose example.
+x-es-common: &es-common
+  image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+  depends_on:
+    setup:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD-SHELL", "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'"]
+    interval: 10s
+    timeout: 10s
+    retries: 120
+
+x-es-env: &es-env
+  cluster.name: ${CLUSTER_NAME}
+  cluster.initial_master_nodes: es01,es02,es03
+  ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+  ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+  xpack.security.enabled: "true"
+  xpack.security.http.ssl.enabled: "true"
+  xpack.security.http.ssl.certificate_authorities: certs/ca/ca.crt
+  xpack.security.transport.ssl.enabled: "true"
+  xpack.security.transport.ssl.certificate_authorities: certs/ca/ca.crt
+  xpack.security.transport.ssl.verification_mode: certificate
+  xpack.license.self_generated.type: basic
+  path.repo: /usr/share/elasticsearch/snapshots
+
+services:
+  # One-shot container: builds a CA + a cert per node, fixes permissions,
+  # then sets the kibana_system password once the cluster is up.
+  setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    user: "0"
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+      - snapshots:/usr/share/elasticsearch/snapshots
+    command: >
+      bash -c '
+        if [ x${ELASTIC_PASSWORD} == x ]; then echo "Set ELASTIC_PASSWORD in .env"; exit 1;
+        elif [ x${KIBANA_PASSWORD} == x ]; then echo "Set KIBANA_PASSWORD in .env"; exit 1; fi;
+        if [ ! -f config/certs/ca.zip ]; then
+          echo "Creating CA";
+          bin/elasticsearch-certutil ca --silent --pem -out config/certs/ca.zip;
+          unzip config/certs/ca.zip -d config/certs;
+        fi;
+        if [ ! -f config/certs/certs.zip ]; then
+          echo "Creating node certs";
+          echo -ne \
+          "instances:\n"\
+          "  - name: es01\n"\
+          "    dns: [es01, localhost]\n"\
+          "    ip: [127.0.0.1]\n"\
+          "  - name: es02\n"\
+          "    dns: [es02, localhost]\n"\
+          "    ip: [127.0.0.1]\n"\
+          "  - name: es03\n"\
+          "    dns: [es03, localhost]\n"\
+          "    ip: [127.0.0.1]\n"\
+          > config/certs/instances.yml;
+          bin/elasticsearch-certutil cert --silent --pem -out config/certs/certs.zip --in config/certs/instances.yml --ca-cert config/certs/ca/ca.crt --ca-key config/certs/ca/ca.key;
+          unzip config/certs/certs.zip -d config/certs;
+        fi;
+        echo "Setting file permissions";
+        chown -R root:root config/certs;
+        find config/certs -type d -exec chmod 750 \{\} \;;
+        find config/certs -type f -exec chmod 640 \{\} \;;
+        chown -R 1000:0 /usr/share/elasticsearch/snapshots;
+        chmod 770 /usr/share/elasticsearch/snapshots;
+        echo "Waiting for Elasticsearch";
+        until curl -s --cacert config/certs/ca/ca.crt https://es01:9200 | grep -q "missing authentication credentials"; do sleep 10; done;
+        echo "Setting kibana_system password";
+        until curl -s -X POST --cacert config/certs/ca/ca.crt -u "elastic:${ELASTIC_PASSWORD}" -H "Content-Type: application/json" https://es01:9200/_security/user/kibana_system/_password -d "{\"password\":\"${KIBANA_PASSWORD}\"}" | grep -q "^{}"; do sleep 10; done;
+        echo "All done!";
+      '
+    healthcheck:
+      test: ["CMD-SHELL", "[ -f config/certs/es03/es03.crt ]"]
+      interval: 1s
+      timeout: 5s
+      retries: 120
+
+  es01:
+    <<: *es-common
+    ports: ["9200:9200"]
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+      - es01:/usr/share/elasticsearch/data
+      - snapshots:/usr/share/elasticsearch/snapshots
+    environment:
+      <<: *es-env
+      node.name: es01
+      discovery.seed_hosts: es02,es03
+      xpack.security.http.ssl.key: certs/es01/es01.key
+      xpack.security.http.ssl.certificate: certs/es01/es01.crt
+      xpack.security.transport.ssl.key: certs/es01/es01.key
+      xpack.security.transport.ssl.certificate: certs/es01/es01.crt
+
+  es02:
+    <<: *es-common
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+      - es02:/usr/share/elasticsearch/data
+      - snapshots:/usr/share/elasticsearch/snapshots
+    environment:
+      <<: *es-env
+      node.name: es02
+      discovery.seed_hosts: es01,es03
+      xpack.security.http.ssl.key: certs/es02/es02.key
+      xpack.security.http.ssl.certificate: certs/es02/es02.crt
+      xpack.security.transport.ssl.key: certs/es02/es02.key
+      xpack.security.transport.ssl.certificate: certs/es02/es02.crt
+
+  es03:
+    <<: *es-common
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+      - es03:/usr/share/elasticsearch/data
+      - snapshots:/usr/share/elasticsearch/snapshots
+    environment:
+      <<: *es-env
+      node.name: es03
+      discovery.seed_hosts: es01,es02
+      xpack.security.http.ssl.key: certs/es03/es03.key
+      xpack.security.http.ssl.certificate: certs/es03/es03.crt
+      xpack.security.transport.ssl.key: certs/es03/es03.key
+      xpack.security.transport.ssl.certificate: certs/es03/es03.crt
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:${STACK_VERSION}
+    depends_on:
+      es01:
+        condition: service_healthy
+    ports: ["5601:5601"]
+    volumes:
+      - certs:/usr/share/kibana/config/certs
+    environment:
+      SERVERNAME: kibana
+      ELASTICSEARCH_HOSTS: https://es01:9200
+      ELASTICSEARCH_USERNAME: kibana_system
+      ELASTICSEARCH_PASSWORD: ${KIBANA_PASSWORD}
+      ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES: config/certs/ca/ca.crt
+
+volumes: { certs: {}, snapshots: {}, es01: {}, es02: {}, es03: {} }

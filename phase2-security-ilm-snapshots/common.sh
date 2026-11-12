@@ -18,7 +18,10 @@ es() {
 # code_as USER PASS METHOD /path [json-body]   -> prints only the HTTP status code
 code_as() {
   local u=$1 pw=$2 m=$3 p=$4; shift 4
-  if [[ $# -gt 0 ]]; then
+  if [[ $m == HEAD ]]; then
+    # curl -X HEAD waits for a body that never comes; -I sends a proper HEAD request
+    curl -s -o /dev/null -w "%{http_code}" -m 10 --cacert ca.crt -u "$u:$pw" -I "$ES_URL$p"
+  elif [[ $# -gt 0 ]]; then
     curl -s -o /dev/null -w "%{http_code}" --cacert ca.crt -u "$u:$pw" -X "$m" "$ES_URL$p" -H 'Content-Type: application/json' -d "$1"
   else
     curl -s -o /dev/null -w "%{http_code}" --cacert ca.crt -u "$u:$pw" -X "$m" "$ES_URL$p"

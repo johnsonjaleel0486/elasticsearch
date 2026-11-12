@@ -6,7 +6,7 @@ Hands-on lab standing up and operating Elasticsearch and OpenSearch clusters: cl
 | Phase | Folder | Focus | Status |
 |---|---|---|---|
 | 1 | `phase1-docker-cluster/` | 3-node Elasticsearch + Kibana, shards/replicas, explicit mappings, failure + rolling-restart drills | Done |
-| 2 | `phase2-security-ilm-snapshots/` | TLS + users/roles, ILM hot-warm-delete, snapshot backup/restore, SLM | In progress |
+| 2 | `phase2-security-ilm-snapshots/` | TLS + users/roles, ILM hot-warm-delete, snapshot backup/restore, SLM | Done |
 | 3 | `phase3-ingestion/` | Logstash + Filebeat pipeline, NiFi flow into Elasticsearch | Planned |
 | 4 | `phase4-opensearch/` | Same cluster on OpenSearch, ISM policies, Dashboards | Planned |
 | 5 | `phase5-k8s-eck/` | ECK operator on Kubernetes, scaling nodes | Planned |
@@ -52,3 +52,21 @@ cd phase2-security-ilm-snapshots
 - ILM timings are shortened for the lab (rollover at 3 docs, delete after 3 minutes, poll every 10s). Real values would be days/size-based, e.g. rollover at 50GB primary shard size or 1 day.
 - Modern alternative to rollover aliases: data streams (same ILM policy, Elasticsearch manages the backing indices).
 - `create_doc` only allows the bulk `create` action (append-only). The bulk `index` action can overwrite an existing document, so it needs the stronger `index` privilege. A log-shipping service account should be append-only.
+
+## Phase 2 results (run on Docker Desktop, macOS, 2026-11-11)
+**TLS and authentication**
+- Secure 3-node cluster formed green with TLS on HTTP and transport (certs from a lab CA via `elasticsearch-certutil`). es02 won the master election.
+- No credentials: HTTP 401. Plain HTTP: connection refused (HTTPS only).
+
+**Least-privilege access (6/6 checks passed)**
+- `analyst` (logs_reader): search app-logs = 200; write, delete index, read `.security` = 403.
+- `ingest_svc` (logs_writer): search = 403. Wrong password = 401.
+- Lesson: the first load as `ingest_svc` failed (`"errors":true`) because `create_doc` is append-only and the bulk `index` action can overwrite. Kept the account append-only and switched the pipeline to bulk `create`.
+
+**ILM**
+- 4 docs written through the `lab-logs` alias, rollover at `max_docs: 3`: new write index `lab-logs-000002`, alias moved automatically.
+- `lab-logs-000001` went hot (complete) to warm (read-only, force merge) and was deleted by the policy; phase timers start at rollover.
+
+**Snapshot and restore**
+- fs repository verified on all 3 nodes. Snapshot SUCCESS, `app-logs` deleted (404), restored, green, doc count 3 before and 3 after.
+- SLM policy `nightly` (01:30 UTC, keep 7 days, min 3, max 14) executed on demand: 33 indices, SUCCESS. Snapshot names use UTC date math.

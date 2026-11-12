@@ -36,14 +36,6 @@ if [[ "$(curl -s -o /dev/null -w '%{http_code}' -m 10 --cacert ca.crt -u "elasti
       "source_file": { "type": "keyword" } } } }'
 fi
 
-step "Truststore so NiFi trusts the cluster's CA"
-docker run --rm --user 0 -v "$PWD/nifi-lab":/work -v "$PWD/ca.crt":/ca.crt:ro \
-  --entrypoint /usr/share/elasticsearch/jdk/bin/keytool \
-  "docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}" \
-  -importcert -noprompt -alias lab-ca -file /ca.crt \
-  -keystore /work/truststore.p12 -storetype PKCS12 -storepass "${NIFI_TRUSTSTORE_PASSWORD}" 2>&1 | tail -1 || true
-chmod 644 nifi-lab/truststore.p12 2>/dev/null || true
-
 step "Sample files (one bad record on purpose)"
 cat > nifi-lab/samples/orders-001.json <<'J'
 [
@@ -66,6 +58,13 @@ for i in $(seq 1 60); do
   if docker compose logs nifi 2>/dev/null | grep -qE 'Started Application|NiFi has started'; then break; fi
   sleep 5
 done
+step "Truststore so NiFi trusts the cluster's CA (built with NiFi's own Java, so NiFi can read it)"
+cp ca.crt nifi-lab/ca.crt
+docker compose exec -T -e TSPW="${NIFI_TRUSTSTORE_PASSWORD}" nifi bash -c \
+  'rm -f /opt/nifi/lab/truststore.p12 && "$JAVA_HOME/bin/keytool" -importcert -noprompt -alias lab-ca \
+   -file /opt/nifi/lab/ca.crt -keystore /opt/nifi/lab/truststore.p12 -storetype PKCS12 -storepass "$TSPW" \
+   && "$JAVA_HOME/bin/keytool" -list -keystore /opt/nifi/lab/truststore.p12 -storepass "$TSPW" | grep trustedCertEntry'
+
 echo
 echo "NiFi UI:    https://localhost:8443/nifi   (accept the browser's self-signed cert warning)"
 echo "Login:      admin / ${NIFI_ADMIN_PASSWORD}"

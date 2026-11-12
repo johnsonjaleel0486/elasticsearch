@@ -35,3 +35,5 @@ Open https://localhost:8443/nifi and build:
 5. Enable the controller services, start everything, then `./nifi.sh drop` and `./nifi.sh check`.
 
 Expected: 4 good orders indexed with `pipeline` and `source_file` added; the record with `"amount":"not-a-number"` is rejected by the strict mapping and lands in the **errors** queue instead of silently polluting the index.
+
+**Lesson learned:** a PKCS12 truststore built with one Java version (Elasticsearch's bundled JDK) was rejected by NiFi with `keystore password was incorrect`, even though `keytool -list` with the same password worked. Rebuilding it with NiFi's own `keytool` fixed it. That error message can mean a format/JDK mismatch, not just a wrong password.
